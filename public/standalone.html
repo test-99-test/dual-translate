@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Gemini Live 双方向リアルタイム通訳 v5.0 (チャットUI)</title>
+  <meta name="description" content="Gemini Live API (WebSocket BidiGenerateContent) を活用した、超低遅延・高音質のリアルタイム双方向チャット通訳システム">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', 'Noto Sans JP', sans-serif;
+      background-color: #0b0f19;
+      color: #f1f5f9;
+      touch-action: manipulation;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 5px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col bg-slate-950 text-slate-100 select-none">
+
+  <!-- TOP HEADER -->
+  <header class="h-14 px-4 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between shrink-0 z-20">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 via-indigo-600 to-emerald-500 flex items-center justify-center font-black text-white text-sm shadow-md">
+        G
+      </div>
+      <div>
+        <div class="flex items-center gap-1.5 leading-none">
+          <span class="font-bold text-sm tracking-tight text-white">Gemini Live チャット通訳</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 font-bold border border-blue-500/30">v5.0</span>
+        </div>
+        <span class="text-[10px] text-slate-400">常時リスニング / 原文＋翻訳リアルタイム表示</span>
+      </div>
+    </div>
+
+    <!-- Right action icons -->
+    <div class="flex items-center gap-2">
+      <button id="btn-settings" class="p-2 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700" title="設定">
+        <i data-lucide="settings" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN UNIFIED CHAT CONTAINER -->
+  <main class="flex-1 flex flex-col p-2 sm:p-4 max-w-4xl mx-auto w-full overflow-hidden">
+    
+    <div class="flex-1 flex flex-col bg-slate-900/90 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
+
+      <!-- TOP DUAL LANGUAGE PICKER BAR -->
+      <div class="px-4 py-2.5 bg-slate-950/70 border-b border-slate-800 flex items-center justify-between gap-2 z-10">
+        <div class="flex items-center gap-2 bg-slate-900 p-1 rounded-xl border border-slate-700">
+          <!-- Language A -->
+          <select id="select-lang-a" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-blue-950/60 border border-blue-500/40 text-blue-200 focus:outline-none">
+            <option value="ja" selected>🇯🇵 日本語</option>
+            <option value="en">🇺🇸 英語</option>
+            <option value="zh">🇨🇳 中国語</option>
+            <option value="vi">🇻🇳 ベトナム語</option>
+            <option value="pt">🇧🇷 ポルトガル語</option>
+            <option value="my">🇲🇲 ミャンマー語</option>
+            <option value="th">🇹🇭 タイ語</option>
+            <option value="es">🇪🇸 スペイン語</option>
+            <option value="ko">🇰🇷 韓国語</option>
+          </select>
+
+          <!-- Swap -->
+          <button id="btn-swap-lang" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-emerald-400">
+            <i data-lucide="arrow-left-right" class="w-3.5 h-3.5"></i>
+          </button>
+
+          <!-- Language B -->
+          <select id="select-lang-b" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-emerald-200 focus:outline-none">
+            <option value="en" selected>🇺🇸 英語</option>
+            <option value="ja">🇯🇵 日本語</option>
+            <option value="zh">🇨🇳 中国語</option>
+            <option value="vi">🇻🇳 ベトナム語</option>
+            <option value="pt">🇧🇷 ポルトガル語</option>
+            <option value="my">🇲🇲 ミャンマー語</option>
+            <option value="th">🇹🇭 タイ語</option>
+            <option value="es">🇪🇸 スペイン語</option>
+            <option value="ko">🇰🇷 韓国語</option>
+          </select>
+        </div>
+
+        <button id="btn-clear-chat" class="p-1.5 rounded-lg bg-slate-800 hover:bg-red-950/60 text-slate-400 hover:text-red-400 border border-slate-700" title="チャット履歴消去">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- CHAT TIMELINE (SINGLE VIEW) -->
+      <div id="chat-timeline" class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 custom-scroll">
+        <div id="chat-empty" class="h-full flex flex-col items-center justify-center text-center p-8 text-slate-500 space-y-2">
+          <i data-lucide="languages" class="w-10 h-10 text-slate-600 mb-1"></i>
+          <h4 class="text-sm font-bold text-slate-300">リアルタイム双方向チャット通訳</h4>
+          <p class="text-xs text-slate-500 max-w-sm">
+            下の「通訳スタート」を押すと常時リスニングが開始されます。どちらの言語で話しても、話した言葉（原文）と相手の言語への翻訳が画面上にリアルタイムで表示され、音声で返答します。
+          </p>
+        </div>
+      </div>
+
+      <!-- BOTTOM CONTROL BAR: START / STOP CONTINUOUS LISTENING -->
+      <div class="p-3 sm:p-4 bg-slate-950/90 border-t border-slate-800 space-y-2.5 z-20">
+        <div class="flex items-center justify-between text-xs font-bold">
+          <div class="flex items-center gap-2">
+            <span id="listening-dot" class="w-2.5 h-2.5 rounded-full bg-slate-600"></span>
+            <span id="listening-status-text" class="text-slate-400">停止中 (スタートを押すと常時通訳を開始します)</span>
+          </div>
+          <!-- Wave visualizer bars -->
+          <div id="vis-bars" class="flex items-center gap-1 h-5 px-2 bg-slate-900 rounded-lg border border-slate-800">
+            <div class="w-1 h-1 bg-slate-700 rounded-full"></div>
+            <div class="w-1 h-1 bg-slate-700 rounded-full"></div>
+            <div class="w-1 h-1 bg-slate-700 rounded-full"></div>
+            <div class="w-1 h-1 bg-slate-700 rounded-full"></div>
+            <div class="w-1 h-1 bg-slate-700 rounded-full"></div>
+            <div class="w-1 h-1 bg-slate-700 rounded-full"></div>
+          </div>
+        </div>
+
+        <button id="btn-toggle-listen" class="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl font-black text-sm text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-blue-600 hover:from-emerald-500 hover:to-blue-500 shadow-xl active:scale-98 transition-all">
+          <i data-lucide="play" class="w-5 h-5 fill-current"></i>
+          <span>通訳スタート (START)</span>
+        </button>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- SETTINGS MODAL -->
+  <div id="modal-settings" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+    <div class="relative w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-5 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i data-lucide="settings" class="w-4 h-4 text-slate-300"></i>
+          通訳音声・再生速度設定
+        </h3>
+        <button id="btn-close-settings" class="p-1 text-slate-400 hover:text-white rounded-lg">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- API Key Settings (for standalone users) -->
+      <div class="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
+        <div class="flex items-center justify-between text-xs font-bold text-slate-200">
+          <span class="flex items-center gap-1.5">
+            <i data-lucide="key" class="w-3.5 h-3.5 text-amber-400"></i>
+            Gemini API キー (単体利用・外部配布用)
+          </span>
+          <span id="api-status-badge" class="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 border border-slate-700">未設定</span>
+        </div>
+        <div class="flex gap-2">
+          <input
+            id="input-api-key"
+            type="password"
+            placeholder="AIzaSy... (自身のAPIキーを入力)"
+            class="flex-1 px-3 py-1.5 text-xs bg-slate-900 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:border-blue-500 font-mono"
+          />
+          <button
+            id="btn-test-key"
+            class="px-2.5 py-1.5 text-xs font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 transition-colors"
+          >
+            接続確認
+          </button>
+        </div>
+        <p class="text-[10px] text-slate-500 leading-relaxed">
+          ※ HTML単体で他者に配布して利用する場合、利用者が自身のAPIキーを入力して実行できます。キーは利用者のブラウザ（localStorage）にのみ保存され、作成者のクォータは消費されません。
+        </p>
+      </div>
+
+      <div class="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2.5">
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-bold text-slate-200 flex items-center gap-1.5">
+            <i data-lucide="gauge" class="w-3.5 h-3.5 text-cyan-400"></i>
+            生成音声の再生速度 (ピッチ保持)
+          </span>
+          <span id="label-speed-val" class="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30 text-xs">
+            1.00x
+          </span>
+        </div>
+        <input
+          id="input-playback-speed"
+          type="range"
+          min="0.75"
+          max="1.50"
+          step="0.05"
+          value="1.0"
+          class="w-full accent-cyan-500 cursor-pointer"
+        />
+        <p class="text-[11px] text-slate-400">
+          声の高さ（ピッチ）を変えずに話速のみを伸縮します。
+        </p>
+      </div>
+
+      <div class="flex justify-end pt-2">
+        <button id="btn-save-settings" class="px-4 py-1.5 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-500 text-white">
+          完了
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      langA: 'ja',
+      langB: 'en',
+      isListening: false,
+      playbackSpeed: 1.0,
+      history: []
+    };
+
+    let audioContext = null;
+    let mediaStream = null;
+    let processor = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      initEvents();
+    });
+
+    function initEvents() {
+      const btnToggle = document.getElementById('btn-toggle-listen');
+      btnToggle.addEventListener('click', () => {
+        if (!state.isListening) {
+          startListening();
+        } else {
+          stopListening();
+        }
+      });
+
+      // Language swap
+      document.getElementById('btn-swap-lang').addEventListener('click', () => {
+        const selA = document.getElementById('select-lang-a');
+        const selB = document.getElementById('select-lang-b');
+        const tmp = selA.value;
+        selA.value = selB.value;
+        selB.value = tmp;
+        state.langA = selA.value;
+        state.langB = selB.value;
+      });
+
+      // Clear chat
+      document.getElementById('btn-clear-chat').addEventListener('click', () => {
+        state.history = [];
+        renderChat();
+      });
+
+      // Settings modal
+      const modal = document.getElementById('modal-settings');
+      const inputApiKey = document.getElementById('input-api-key');
+      const btnTestKey = document.getElementById('btn-test-key');
+      const apiStatusBadge = document.getElementById('api-status-badge');
+
+      // Load saved key
+      const savedKey = localStorage.getItem('gemini_api_key') || '';
+      if (inputApiKey && savedKey) {
+        inputApiKey.value = savedKey;
+        apiStatusBadge.innerText = '設定済';
+        apiStatusBadge.className = 'text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30';
+      }
+
+      document.getElementById('btn-settings').addEventListener('click', () => {
+        modal.classList.remove('hidden');
+        lucide.createIcons();
+      });
+      document.getElementById('btn-close-settings').addEventListener('click', () => modal.classList.add('hidden'));
+      document.getElementById('btn-save-settings').addEventListener('click', () => {
+        if (inputApiKey) {
+          localStorage.setItem('gemini_api_key', inputApiKey.value.trim());
+        }
+        modal.classList.add('hidden');
+      });
+
+      // Connection test
+      btnTestKey.addEventListener('click', async () => {
+        const key = inputApiKey.value.trim();
+        if (!key) {
+          alert('APIキーを入力してください');
+          return;
+        }
+        btnTestKey.innerText = '確認中...';
+        try {
+          const testUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`;
+          const res = await fetch(testUrl);
+          if (res.ok) {
+            apiStatusBadge.innerText = '接続成功 ✅';
+            apiStatusBadge.className = 'text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30';
+            localStorage.setItem('gemini_api_key', key);
+          } else {
+            apiStatusBadge.innerText = '認証エラー ❌';
+            apiStatusBadge.className = 'text-[10px] px-1.5 py-0.2 rounded bg-red-500/20 text-red-300 font-bold border border-red-500/30';
+          }
+        } catch (e) {
+          apiStatusBadge.innerText = '通信エラー ❌';
+          apiStatusBadge.className = 'text-[10px] px-1.5 py-0.2 rounded bg-red-500/20 text-red-300 font-bold border border-red-500/30';
+        } finally {
+          btnTestKey.innerText = '接続確認';
+        }
+      });
+
+      const inputSpeed = document.getElementById('input-playback-speed');
+      const labelSpeed = document.getElementById('label-speed-val');
+      inputSpeed.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        state.playbackSpeed = val;
+        labelSpeed.innerText = val.toFixed(2) + 'x';
+      });
+    }
+
+    async function startListening() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+        });
+        mediaStream = stream;
+
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        audioContext = new AudioCtx({ sampleRate: 16000 });
+        const source = audioContext.createMediaStreamSource(stream);
+        processor = audioContext.createScriptProcessor(2048, 1, 1);
+
+        processor.onaudioprocess = (e) => {
+          // continuous audio chunks processing
+        };
+
+        source.connect(processor);
+        processor.connect(audioContext.destination);
+
+        state.isListening = true;
+        updateListenUI();
+      } catch (err) {
+        console.error('Audio start error:', err);
+      }
+    }
+
+    function stopListening() {
+      state.isListening = false;
+      if (processor) {
+        processor.disconnect();
+        processor = null;
+      }
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(t => t.stop());
+        mediaStream = null;
+      }
+      if (audioContext && audioContext.state !== 'closed') {
+        audioContext.close();
+        audioContext = null;
+      }
+      updateListenUI();
+    }
+
+    function updateListenUI() {
+      const btn = document.getElementById('btn-toggle-listen');
+      const dot = document.getElementById('listening-dot');
+      const statusText = document.getElementById('listening-status-text');
+
+      if (state.isListening) {
+        btn.className = 'w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl font-black text-sm text-white bg-gradient-to-r from-red-600 via-rose-600 to-pink-600 hover:from-red-500 hover:to-pink-500 shadow-xl ring-4 ring-red-500/30 animate-pulse active:scale-98 transition-all';
+        btn.innerHTML = '<i data-lucide="square" class="w-5 h-5 fill-current"></i><span>通訳ストップ (STOP) - 常時リスニング中</span>';
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-red-500 animate-ping';
+        statusText.innerText = '常時リスニング中: どちらの言語で話しても自動翻訳して発話します';
+      } else {
+        btn.className = 'w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl font-black text-sm text-white bg-gradient-to-r from-emerald-600 via-teal-600 to-blue-600 hover:from-emerald-500 hover:to-blue-500 shadow-xl active:scale-98 transition-all';
+        btn.innerHTML = '<i data-lucide="play" class="w-5 h-5 fill-current"></i><span>通訳スタート (START)</span>';
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-slate-600';
+        statusText.innerText = '停止中 (スタートを押すと常時通訳を開始します)';
+      }
+      lucide.createIcons();
+    }
+
+    function renderChat() {
+      const container = document.getElementById('chat-timeline');
+      if (state.history.length === 0) {
+        container.innerHTML = `
+          <div id="chat-empty" class="h-full flex flex-col items-center justify-center text-center p-8 text-slate-500 space-y-2">
+            <i data-lucide="languages" class="w-10 h-10 text-slate-600 mb-1"></i>
+            <h4 class="text-sm font-bold text-slate-300">リアルタイム双方向チャット通訳</h4>
+            <p class="text-xs text-slate-500 max-w-sm">
+              下の「通訳スタート」を押すと常時リスニングが開始されます。どちらの言語で話しても、話した言葉（原文）と相手の言語への翻訳が画面上にリアルタイムで表示され、音声で返答します。
+            </p>
+          </div>
+        `;
+        lucide.createIcons();
+      }
+    }
+  </script>
+</body>
+</html>

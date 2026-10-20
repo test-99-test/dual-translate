@@ -1,0 +1,6 @@
+{
+  "name": "Gemini Live 双方向リアルタイム通訳",
+  "description": "Gemini Live API (WebSocket BidiGenerateContent) を活用した、超低遅延・高音質の対面双方向音声リアルタイム通訳システム",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
